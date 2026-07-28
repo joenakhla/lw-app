@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readdir, stat } from 'fs/promises';
 import path from 'path';
 
+export const dynamic = 'force-dynamic';
+
 const WORKSPACE_ROOT = '/workspace';
 
 export async function GET(req: NextRequest) {
