@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import nodemailer from 'nodemailer';
+import { supabaseAdmin } from '@/lib/supabase';
+import { slugify } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
-import { createClient } from '@supabase/supabase-js';
-import nodemailer from 'nodemailer';
-import { slugify } from '@/lib/utils';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,15 +14,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
+    const db = supabaseAdmin();
     const slug = `${slugify(business_name)}-${Date.now().toString(36)}`;
 
     // (a) Save to Supabase
-    const { data: client, error: dbError } = await supabase
+    const { data: client, error: dbError } = await db
       .from('clients')
       .insert({ slug, business_name, answers, status: 'onboarded' })
       .select()
@@ -31,16 +27,7 @@ export async function POST(req: NextRequest) {
     if (dbError) throw new Error(`DB error: ${dbError.message}`);
 
     // (b) Webhook to OpenClaw Leo
-    const webhookPayload = {
-      event: 'new_client_onboarded',
-      client_id: client.id,
-      slug,
-      business_name,
-      contact_email,
-      answers,
-      portal_url: `${process.env.NEXT_PUBLIC_SITE_URL}/client/${slug}`,
-      submitted_at: new Date().toISOString(),
-    };
+    const portalUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/client/${slug}`;
 
     const webhookRes = await fetch(
       'https://openclaw-q0m0.srv1857647.hstgr.cloud/webhook',
@@ -50,7 +37,16 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${process.env.OPENCLAW_GATEWAY_TOKEN}`,
         },
-        body: JSON.stringify(webhookPayload),
+        body: JSON.stringify({
+          event: 'new_client_onboarded',
+          client_id: client.id,
+          slug,
+          business_name,
+          contact_email,
+          answers,
+          portal_url: portalUrl,
+          submitted_at: new Date().toISOString(),
+        }),
       }
     );
 
@@ -69,8 +65,6 @@ export async function POST(req: NextRequest) {
           pass: process.env.ZOHO_SMTP_PASS,
         },
       });
-
-      const portalUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/client/${slug}`;
 
       await transporter.sendMail({
         from: `"Lead Waterfall" <${process.env.ZOHO_SMTP_USER}>`,
