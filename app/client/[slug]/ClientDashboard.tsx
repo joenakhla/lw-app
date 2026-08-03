@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   BarChart3, Calendar, TrendingUp, Zap, ChevronRight,
-  FileText, Target, ArrowUpRight, ArrowDownRight, Minus
+  FileText, Target, ArrowUpRight, ArrowDownRight, Minus,
+  Download, FolderOpen, Loader2,
 } from 'lucide-react';
 
 interface Client {
@@ -53,7 +54,20 @@ const TAB_ITEMS = [
   { id: 'calendar', label: 'Content Calendar', icon: Calendar },
   { id: 'performance', label: 'Performance', icon: BarChart3 },
   { id: 'nextsteps', label: 'Next Steps', icon: Target },
+  { id: 'deliverables', label: 'Deliverables', icon: Download },
 ];
+
+const FILE_GROUPS: { prefix: string; label: string }[] = [
+  { prefix: 'research-', label: 'Research' },
+  { prefix: 'strategy-', label: 'Strategy' },
+  { prefix: 'content-', label: 'Content' },
+  { prefix: 'emails-', label: 'Emails' },
+  { prefix: 'seo-', label: 'SEO' },
+  { prefix: 'reports-', label: 'Reports' },
+];
+
+const DELIVERY_TOKEN = 'yuesHqzPLB3U9AwBXFafNy8HknHstv0r';
+const DELIVERY_BASE = 'https://webhook.srv1857647.hstgr.cloud';
 
 const STATUS_COLORS: Record<ContentItem['status'], string> = {
   published: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
@@ -63,7 +77,26 @@ const STATUS_COLORS: Record<ContentItem['status'], string> = {
 
 export default function ClientDashboard({ client, reports }: { client: Client; reports: Report[] }) {
   const [activeTab, setActiveTab] = useState('week');
+  const [deliverables, setDeliverables] = useState<string[]>([]);
+  const [delLoading, setDelLoading] = useState(false);
   const latest = reports[0];
+
+  useEffect(() => {
+    if (activeTab !== 'deliverables') return;
+    setDelLoading(true);
+    fetch(`${DELIVERY_BASE}/list/${client.slug}?token=${DELIVERY_TOKEN}`)
+      .then(r => r.json())
+      .then(data => {
+        // Accept array of strings or array of objects with a name/filename field
+        const files: string[] = Array.isArray(data)
+          ? data.map((f: unknown) => (typeof f === 'string' ? f : (f as Record<string, string>).name || (f as Record<string, string>).filename || ''))
+              .filter(Boolean)
+          : [];
+        setDeliverables(files);
+      })
+      .catch(() => setDeliverables([]))
+      .finally(() => setDelLoading(false));
+  }, [activeTab, client.slug]);
 
   return (
     <div className="min-h-screen" style={{ background: '#0A1628' }}>
@@ -105,7 +138,9 @@ export default function ClientDashboard({ client, reports }: { client: Client; r
           ))}
         </div>
 
-        {!latest ? (
+        {activeTab === 'deliverables' ? (
+          <DeliverablesTab slug={client.slug} files={deliverables} loading={delLoading} />
+        ) : !latest ? (
           <EmptyState />
         ) : (
           <>
@@ -298,6 +333,84 @@ function PerformanceTab({ report }: { report: Report }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function DeliverablesTab({ slug, files, loading }: { slug: string; files: string[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+      </div>
+    );
+  }
+
+  if (files.length === 0) {
+    return (
+      <div className="text-center py-20">
+        <div className="w-16 h-16 rounded-full bg-blue-900/40 border border-blue-800/50 flex items-center justify-center mx-auto mb-4">
+          <FolderOpen className="w-8 h-8 text-blue-400" />
+        </div>
+        <h3 className="text-lg font-semibold text-white mb-2">No deliverables yet</h3>
+        <p className="text-slate-400 max-w-sm mx-auto">
+          Your files will appear here as your AI team completes them.
+        </p>
+      </div>
+    );
+  }
+
+  // Group files by prefix; ungrouped files go into "Other"
+  const grouped: Record<string, string[]> = {};
+  const other: string[] = [];
+
+  for (const file of files) {
+    const group = FILE_GROUPS.find(g => file.startsWith(g.prefix));
+    if (group) {
+      grouped[group.label] = grouped[group.label] || [];
+      grouped[group.label].push(file);
+    } else {
+      other.push(file);
+    }
+  }
+  if (other.length > 0) grouped['Other'] = other;
+
+  const orderedGroups = [
+    ...FILE_GROUPS.map(g => g.label).filter(l => grouped[l]),
+    ...(grouped['Other'] ? ['Other'] : []),
+  ];
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold text-white">Deliverables</h2>
+      {orderedGroups.map(groupLabel => (
+        <div key={groupLabel} className="glass rounded-xl p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <h3 className="text-sm font-semibold text-slate-300">{groupLabel}</h3>
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+              {grouped[groupLabel].length}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {grouped[groupLabel].map(filename => (
+              <a
+                key={filename}
+                href={`${DELIVERY_BASE}/files/${slug}/${filename}?token=${DELIVERY_TOKEN}`}
+                download={filename}
+                className="flex items-center justify-between px-4 py-3 rounded-lg border border-slate-800/60 hover:border-blue-500/40 hover:bg-blue-900/10 transition-all group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileText className="w-4 h-4 text-slate-500 group-hover:text-blue-400 flex-shrink-0 transition-colors" />
+                  <span className="text-sm text-slate-300 group-hover:text-white truncate transition-colors">
+                    {filename}
+                  </span>
+                </div>
+                <Download className="w-4 h-4 text-slate-600 group-hover:text-blue-400 flex-shrink-0 ml-3 transition-colors" />
+              </a>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
