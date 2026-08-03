@@ -4,11 +4,15 @@ import ClientDashboard from './ClientDashboard';
 
 export const dynamic = 'force-dynamic';
 
+function getSupabase() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Supabase env vars not set');
+  return createClient(url, key);
+}
+
 async function getClient(slug: string) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const supabase = getSupabase();
   const { data } = await supabase
     .from('clients')
     .select('*')
@@ -18,10 +22,7 @@ async function getClient(slug: string) {
 }
 
 async function getReports(clientId: string) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const supabase = getSupabase();
   const { data } = await supabase
     .from('reports')
     .select('*')
