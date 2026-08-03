@@ -10,7 +10,7 @@ export async function GET() {
   let queryResult = null;
   try {
     const db = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-    const { data, error } = await db.from('clients').select('slug, business_name, company_name, status').order('created_at', { ascending: false }).limit(10);
+    const { data, error } = await db.from('clients').select('slug, business_name, status').order('created_at', { ascending: false }).limit(10);
     queryResult = { data, error: error?.message };
   } catch (e) {
     queryResult = { error: String(e) };
