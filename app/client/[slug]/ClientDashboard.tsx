@@ -10,7 +10,11 @@ import {
 interface Client {
   id: string;
   slug: string;
-  business_name: string;
+  business_name?: string;
+  company_name?: string;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
   answers: Record<string, string | string[]>;
   status: string;
   created_at: string;
@@ -105,7 +109,7 @@ export default function ClientDashboard({ client, reports }: { client: Client; r
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
             <div className="text-xs text-blue-400 font-medium uppercase tracking-wider mb-0.5">Client Portal</div>
-            <h1 className="text-xl font-bold text-white">{client.business_name}</h1>
+            <h1 className="text-xl font-bold text-white">{client.business_name || client.company_name || client.slug}</h1>
           </div>
           <div className="flex items-center gap-2">
             <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
