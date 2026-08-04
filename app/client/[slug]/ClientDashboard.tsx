@@ -1,11 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   BarChart3, Calendar, TrendingUp, Zap, ChevronRight,
   FileText, Target, ArrowUpRight, ArrowDownRight, Minus,
-  Download, FolderOpen, Loader2,
+  Download, FolderOpen, Loader2, MessageSquare, X, Send,
 } from 'lucide-react';
+
+interface Feedback {
+  id: string;
+  client_slug: string;
+  deliverable_name: string;
+  deliverable_type: string;
+  comment: string;
+  author: string;
+  status: string;
+  parent_id: string | null;
+  created_at: string;
+}
 
 interface Client {
   id: string;
@@ -341,7 +353,142 @@ function PerformanceTab({ report }: { report: Report }) {
   );
 }
 
+function FeedbackModal({
+  slug, filename, onClose, onSubmitted,
+}: {
+  slug: string; filename: string; onClose: () => void; onSubmitted: () => void;
+}) {
+  const [feedbackType, setFeedbackType] = useState('General Comment');
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!comment.trim()) return;
+    setSubmitting(true);
+    const status = feedbackType === 'Request Revision' ? 'revision-requested'
+      : feedbackType === 'Approve' ? 'resolved' : 'open';
+    await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_slug: slug,
+        deliverable_name: filename,
+        deliverable_type: feedbackType,
+        comment: comment.trim(),
+        author: 'client',
+        status,
+      }),
+    });
+    setSubmitting(false);
+    onSubmitted();
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
+      <div className="w-full max-w-md rounded-2xl border border-slate-700/60 p-6 space-y-4"
+        style={{ background: '#0A1628', boxShadow: '0 0 60px rgba(6,182,212,0.08)' }}>
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-white">Give Feedback</h3>
+            <p className="text-slate-500 text-xs mt-0.5 truncate max-w-xs">{filename}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className="text-xs text-slate-400 font-medium mb-1.5 block">Feedback Type</label>
+            <select value={feedbackType} onChange={e => setFeedbackType(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-700/60 text-white text-sm appearance-none focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30"
+              style={{ background: '#0f1f3a' }}>
+              <option>General Comment</option>
+              <option>Request Revision</option>
+              <option>Approve</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 font-medium mb-1.5 block">Comment <span className="text-blue-400">*</span></label>
+            <textarea required rows={4} value={comment} onChange={e => setComment(e.target.value)}
+              placeholder="Describe your feedback..."
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-700/60 text-white placeholder-slate-600 text-sm resize-none focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30"
+              style={{ background: 'rgba(255,255,255,0.04)' }} />
+          </div>
+          <button type="submit" disabled={submitting || !comment.trim()}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40"
+            style={{ background: 'linear-gradient(135deg, #2563EB, #3B82F6)' }}>
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            Submit Feedback
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+const THREAD_BORDER: Record<string, string> = {
+  'revision-requested': 'border-amber-500/60',
+  resolved: 'border-emerald-500/60',
+  open: 'border-blue-500/60',
+};
+const THREAD_BADGE: Record<string, string> = {
+  client: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  joe: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  agent: 'bg-slate-700/60 text-slate-300 border-slate-600/40',
+};
+const STATUS_BADGE: Record<string, string> = {
+  'revision-requested': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  resolved: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  open: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+};
+
+function FeedbackThread({ threads }: { threads: Feedback[] }) {
+  if (threads.length === 0) return null;
+  return (
+    <div className="mt-2 space-y-2 pl-1">
+      {threads.map(f => (
+        <div key={f.id}
+          className={`flex gap-3 pl-3 border-l-2 ${THREAD_BORDER[f.status] ?? THREAD_BORDER.open}`}>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className={`px-2 py-0.5 rounded text-xs font-bold border ${THREAD_BADGE[f.author] ?? THREAD_BADGE.agent}`}>
+                {f.author.toUpperCase()}
+              </span>
+              <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${STATUS_BADGE[f.status] ?? STATUS_BADGE.open}`}>
+                {f.status.replace('-', ' ')}
+              </span>
+              <span className="text-slate-600 text-xs">
+                {new Date(f.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+            <p className="text-sm text-slate-300 leading-relaxed">{f.comment}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DeliverablesTab({ slug, files, loading }: { slug: string; files: string[]; loading: boolean }) {
+  const [modalFile, setModalFile] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+
+  const loadFeedback = useCallback(async () => {
+    if (!slug) return;
+    setFeedbackLoading(true);
+    try {
+      const r = await fetch(`/api/feedback?client_slug=${encodeURIComponent(slug)}`);
+      if (r.ok) setFeedback(await r.json());
+    } catch { /* non-blocking */ }
+    setFeedbackLoading(false);
+  }, [slug]);
+
+  useEffect(() => { loadFeedback(); }, [loadFeedback]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -364,10 +511,8 @@ function DeliverablesTab({ slug, files, loading }: { slug: string; files: string
     );
   }
 
-  // Group files by prefix; ungrouped files go into "Other"
   const grouped: Record<string, string[]> = {};
   const other: string[] = [];
-
   for (const file of files) {
     const group = FILE_GROUPS.find(g => file.startsWith(g.prefix));
     if (group) {
@@ -378,44 +523,68 @@ function DeliverablesTab({ slug, files, loading }: { slug: string; files: string
     }
   }
   if (other.length > 0) grouped['Other'] = other;
-
   const orderedGroups = [
     ...FILE_GROUPS.map(g => g.label).filter(l => grouped[l]),
     ...(grouped['Other'] ? ['Other'] : []),
   ];
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-white">Deliverables</h2>
-      {orderedGroups.map(groupLabel => (
-        <div key={groupLabel} className="glass rounded-xl p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <h3 className="text-sm font-semibold text-slate-300">{groupLabel}</h3>
-            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">
-              {grouped[groupLabel].length}
-            </span>
+    <>
+      {modalFile && (
+        <FeedbackModal
+          slug={slug}
+          filename={modalFile}
+          onClose={() => setModalFile(null)}
+          onSubmitted={loadFeedback}
+        />
+      )}
+      <div className="space-y-6">
+        <h2 className="text-lg font-semibold text-white">Deliverables</h2>
+        {orderedGroups.map(groupLabel => (
+          <div key={groupLabel} className="glass rounded-xl p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <h3 className="text-sm font-semibold text-slate-300">{groupLabel}</h3>
+              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                {grouped[groupLabel].length}
+              </span>
+            </div>
+            <div className="space-y-4">
+              {grouped[groupLabel].map(filename => {
+                const threads = feedback.filter(f => f.deliverable_name === filename);
+                const threadCount = threads.length;
+                return (
+                  <div key={filename}>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`${DELIVERY_BASE}/files/${slug}/${filename}?token=${DELIVERY_TOKEN}`}
+                        download={filename}
+                        className="flex-1 flex items-center justify-between px-4 py-3 rounded-lg border border-slate-800/60 hover:border-blue-500/40 hover:bg-blue-900/10 transition-all group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <FileText className="w-4 h-4 text-slate-500 group-hover:text-blue-400 flex-shrink-0 transition-colors" />
+                          <span className="text-sm text-slate-300 group-hover:text-white truncate transition-colors">
+                            {filename}
+                          </span>
+                        </div>
+                        <Download className="w-4 h-4 text-slate-600 group-hover:text-blue-400 flex-shrink-0 ml-3 transition-colors" />
+                      </a>
+                      <button
+                        onClick={() => setModalFile(filename)}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-700/60 text-slate-400 hover:text-white hover:border-blue-500/40 transition-all text-xs font-medium flex-shrink-0"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        {threadCount > 0 ? threadCount : 'Feedback'}
+                      </button>
+                    </div>
+                    {feedbackLoading ? null : <FeedbackThread threads={threads} />}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="space-y-2">
-            {grouped[groupLabel].map(filename => (
-              <a
-                key={filename}
-                href={`${DELIVERY_BASE}/files/${slug}/${filename}?token=${DELIVERY_TOKEN}`}
-                download={filename}
-                className="flex items-center justify-between px-4 py-3 rounded-lg border border-slate-800/60 hover:border-blue-500/40 hover:bg-blue-900/10 transition-all group"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <FileText className="w-4 h-4 text-slate-500 group-hover:text-blue-400 flex-shrink-0 transition-colors" />
-                  <span className="text-sm text-slate-300 group-hover:text-white truncate transition-colors">
-                    {filename}
-                  </span>
-                </div>
-                <Download className="w-4 h-4 text-slate-600 group-hover:text-blue-400 flex-shrink-0 ml-3 transition-colors" />
-              </a>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </>
   );
 }
 

@@ -4,8 +4,20 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Users, FolderOpen, FileText, CreditCard, Wrench,
   LogOut, RefreshCw, Send, Loader2, ChevronRight,
-  ExternalLink, AlertCircle, CheckCircle
+  ExternalLink, AlertCircle, CheckCircle, MessageSquare,
 } from 'lucide-react';
+
+interface FeedbackItem {
+  id: string;
+  client_slug: string;
+  deliverable_name: string;
+  deliverable_type: string;
+  comment: string;
+  author: string;
+  status: string;
+  parent_id: string | null;
+  created_at: string;
+}
 
 interface Client {
   id: string;
@@ -26,6 +38,7 @@ interface ToolRequest {
 
 const TABS = [
   { id: 'clients', label: 'Clients', icon: Users },
+  { id: 'feedback', label: 'Feedback', icon: MessageSquare },
   { id: 'files', label: 'File Browser', icon: FolderOpen },
   { id: 'meetingpack', label: 'Meeting Pack', icon: FileText },
   { id: 'credits', label: 'Credits', icon: CreditCard },
@@ -118,11 +131,150 @@ export default function AdminPage() {
         </div>
 
         {activeTab === 'clients' && <ClientsTab />}
+        {activeTab === 'feedback' && <FeedbackTab />}
         {activeTab === 'files' && <FilesTab />}
         {activeTab === 'meetingpack' && <MeetingPackTab />}
         {activeTab === 'credits' && <CreditsTab />}
         {activeTab === 'tools' && <ToolRequestsTab />}
       </div>
+    </div>
+  );
+}
+
+const FB_BORDER: Record<string, string> = {
+  'revision-requested': 'border-l-amber-500',
+  resolved: 'border-l-emerald-500',
+  open: 'border-l-blue-500',
+};
+const FB_BADGE: Record<string, string> = {
+  'revision-requested': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  resolved: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  open: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+};
+const AUTHOR_BADGE: Record<string, string> = {
+  client: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  joe: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  agent: 'bg-slate-700/60 text-slate-300 border-slate-600/40',
+};
+
+function FeedbackTab() {
+  const [items, setItems] = useState<FeedbackItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [replyingTo, setReplyingTo] = useState<FeedbackItem | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [replying, setReplying] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const r = await fetch('/api/feedback?all=true');
+    if (r.ok) setItems(await r.json());
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const open = items.filter(f => f.status === 'open' || f.status === 'revision-requested');
+
+  async function submitReply(item: FeedbackItem) {
+    if (!replyText.trim()) return;
+    setReplying(true);
+    await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_slug: item.client_slug,
+        deliverable_name: item.deliverable_name,
+        deliverable_type: 'reply',
+        comment: replyText.trim(),
+        author: 'joe',
+        status: 'open',
+        parent_id: item.id,
+      }),
+    });
+    setReplyText('');
+    setReplyingTo(null);
+    setReplying(false);
+    load();
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-white">
+          Client Feedback
+          {open.length > 0 && (
+            <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              {open.length} open
+            </span>
+          )}
+        </h2>
+        <button onClick={load} className="flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors">
+          <RefreshCw className="w-4 h-4" /> Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+        </div>
+      ) : items.length === 0 ? (
+        <p className="text-slate-500 text-sm">No feedback yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {items.map(item => (
+            <div key={item.id}
+              className={`glass rounded-xl px-5 py-4 border-l-4 ${FB_BORDER[item.status] ?? FB_BORDER.open}`}>
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold border ${AUTHOR_BADGE[item.author] ?? AUTHOR_BADGE.agent}`}>
+                      {item.author.toUpperCase()}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${FB_BADGE[item.status] ?? FB_BADGE.open}`}>
+                      {item.status.replace('-', ' ')}
+                    </span>
+                    <a href={`/client/${item.client_slug}`} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-slate-500 hover:text-blue-400 font-mono transition-colors flex items-center gap-1">
+                      {item.client_slug} <ExternalLink className="w-3 h-3" />
+                    </a>
+                    <span className="text-xs text-slate-600">
+                      {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-1 truncate">{item.deliverable_name}</p>
+                  <p className="text-sm text-slate-200 leading-relaxed">{item.comment}</p>
+                </div>
+                <button
+                  onClick={() => { setReplyingTo(replyingTo?.id === item.id ? null : item); setReplyText(''); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700/60 text-slate-400 hover:text-white hover:border-blue-500/40 transition-all text-xs font-medium flex-shrink-0"
+                >
+                  <Send className="w-3.5 h-3.5" /> Reply
+                </button>
+              </div>
+
+              {replyingTo?.id === item.id && (
+                <div className="mt-4 flex gap-2">
+                  <textarea
+                    value={replyText}
+                    onChange={e => setReplyText(e.target.value)}
+                    placeholder="Type your reply..."
+                    rows={2}
+                    className="flex-1 px-3 py-2 rounded-lg border border-slate-700/60 bg-slate-900/50 text-white placeholder-slate-600 text-sm resize-none focus:outline-none focus:border-blue-500/50"
+                  />
+                  <button
+                    onClick={() => submitReply(item)}
+                    disabled={replying || !replyText.trim()}
+                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40 flex-shrink-0 self-end"
+                    style={{ background: '#2563EB' }}
+                  >
+                    {replying ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send'}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
