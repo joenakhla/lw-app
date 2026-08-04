@@ -82,6 +82,20 @@ const FILE_GROUPS: { prefix: string; label: string }[] = [
   { prefix: 'reports-', label: 'Reports' },
 ];
 
+const FILE_DISPLAY_NAMES: Record<string, string> = {
+  'research-latest.pdf': 'Research Brief',
+  'strategy-latest.pdf': 'Campaign Strategy',
+  'content-articles-latest.pdf': 'SEO Articles',
+  'content-social-latest.pdf': 'Social Media Posts',
+  'emails-sequences-latest.pdf': 'Email Sequences',
+  'seo-latest.pdf': 'SEO Keyword Research',
+  'reports-weekly-latest.pdf': 'Weekly Performance Report',
+};
+
+function displayName(filename: string): string {
+  return FILE_DISPLAY_NAMES[filename] ?? filename;
+}
+
 const DELIVERY_TOKEN = 'yuesHqzPLB3U9AwBXFafNy8HknHstv0r';
 const DELIVERY_BASE = 'https://webhook.srv1857647.hstgr.cloud';
 
@@ -386,7 +400,7 @@ function FeedbackModal({
         <div className="flex items-start justify-between">
           <div>
             <h3 className="text-lg font-bold text-white">Give Feedback</h3>
-            <p className="text-slate-500 text-xs mt-0.5 truncate max-w-xs">{filename}</p>
+            <p className="text-slate-500 text-xs mt-0.5 truncate max-w-xs">{displayName(filename)}</p>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
             <X className="w-5 h-5" />
@@ -556,7 +570,7 @@ function DeliverablesTab({ slug, files, loading }: { slug: string; files: string
                         <div className="flex items-center gap-3 min-w-0">
                           <FileText className="w-4 h-4 text-slate-500 group-hover:text-blue-400 flex-shrink-0 transition-colors" />
                           <span className="text-sm text-slate-300 group-hover:text-white truncate transition-colors">
-                            {filename}
+                            {displayName(filename)}
                           </span>
                         </div>
                         <Download className="w-4 h-4 text-slate-600 group-hover:text-blue-400 flex-shrink-0 ml-3 transition-colors" />

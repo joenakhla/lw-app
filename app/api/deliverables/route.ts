@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 const DELIVERY_BASE = 'https://webhook.srv1857647.hstgr.cloud';
 const DELIVERY_TOKEN = 'yuesHqzPLB3U9AwBXFafNy8HknHstv0r';
@@ -11,6 +12,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const res = await fetch(`${DELIVERY_BASE}/list/${slug}?token=${DELIVERY_TOKEN}`, {
+      cache: 'no-store',
       signal: AbortSignal.timeout(8000),
     });
     const data = await res.json();
