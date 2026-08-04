@@ -49,30 +49,41 @@ export async function POST(req: NextRequest) {
     } catch { /* non-blocking */ }
 
     // Notify webhook bridge
+    let webhookStatus: number | null = null;
+    let webhookBody: string | null = null;
+    const webhookPayload = {
+      type: 'client_feedback',
+      client_slug,
+      client_email: clientEmail,
+      deliverable_name,
+      subject: `Feedback: ${deliverable_name}`,
+      body: comment,
+      requires_revision: status === 'revision-requested',
+    };
     try {
-      await fetch('https://webhook.srv1857647.hstgr.cloud', {
+      console.log('[feedback] Posting to webhook bridge:', JSON.stringify(webhookPayload));
+      const webhookRes = await fetch('https://webhook.srv1857647.hstgr.cloud', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: 'Bearer yuesHqzPLB3U9AwBXFafNy8HknHstv0r',
         },
-        body: JSON.stringify({
-          type: 'client_feedback',
-          client_slug,
-          client_email: clientEmail,
-          deliverable_name,
-          subject: `Feedback: ${deliverable_name}`,
-          body: comment,
-          author: author || 'client',
-          requires_revision: status === 'revision-requested',
-        }),
-        signal: AbortSignal.timeout(5000),
+        body: JSON.stringify(webhookPayload),
+        signal: AbortSignal.timeout(8000),
       });
+      webhookStatus = webhookRes.status;
+      webhookBody = await webhookRes.text();
+      if (!webhookRes.ok) {
+        console.error(`[feedback] Webhook bridge returned ${webhookStatus}:`, webhookBody);
+      } else {
+        console.log(`[feedback] Webhook bridge OK ${webhookStatus}:`, webhookBody);
+      }
     } catch (webhookErr) {
-      console.error('Webhook error:', webhookErr);
+      console.error('[feedback] Webhook bridge fetch failed:', webhookErr instanceof Error ? webhookErr.message : String(webhookErr));
+      webhookBody = String(webhookErr);
     }
 
-    return NextResponse.json({ success: true, feedback: data });
+    return NextResponse.json({ success: true, feedback: data, webhook: { status: webhookStatus, body: webhookBody } });
   } catch (err: unknown) {
     console.error('Feedback POST error:', err);
     return NextResponse.json(
