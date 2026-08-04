@@ -100,16 +100,9 @@ export default function ClientDashboard({ client, reports }: { client: Client; r
   useEffect(() => {
     if (activeTab !== 'deliverables') return;
     setDelLoading(true);
-    fetch(`${DELIVERY_BASE}/list/${client.slug}?token=${DELIVERY_TOKEN}`)
+    fetch(`/api/deliverables?slug=${encodeURIComponent(client.slug)}`)
       .then(r => r.json())
-      .then(data => {
-        // API returns { files: [...], count: N, ... } or a plain array
-        const raw: unknown[] = Array.isArray(data) ? data : (Array.isArray(data?.files) ? data.files : []);
-        const files: string[] = raw
-          .map((f: unknown) => (typeof f === 'string' ? f : (f as Record<string, string>).name || (f as Record<string, string>).filename || ''))
-          .filter(Boolean);
-        setDeliverables(files);
-      })
+      .then(data => setDeliverables(data.files ?? []))
       .catch(() => setDeliverables([]))
       .finally(() => setDelLoading(false));
   }, [activeTab, client.slug]);
