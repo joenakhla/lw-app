@@ -103,11 +103,11 @@ export default function ClientDashboard({ client, reports }: { client: Client; r
     fetch(`${DELIVERY_BASE}/list/${client.slug}?token=${DELIVERY_TOKEN}`)
       .then(r => r.json())
       .then(data => {
-        // Accept array of strings or array of objects with a name/filename field
-        const files: string[] = Array.isArray(data)
-          ? data.map((f: unknown) => (typeof f === 'string' ? f : (f as Record<string, string>).name || (f as Record<string, string>).filename || ''))
-              .filter(Boolean)
-          : [];
+        // API returns { files: [...], count: N, ... } or a plain array
+        const raw: unknown[] = Array.isArray(data) ? data : (Array.isArray(data?.files) ? data.files : []);
+        const files: string[] = raw
+          .map((f: unknown) => (typeof f === 'string' ? f : (f as Record<string, string>).name || (f as Record<string, string>).filename || ''))
+          .filter(Boolean);
         setDeliverables(files);
       })
       .catch(() => setDeliverables([]))
